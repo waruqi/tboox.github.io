@@ -3,6 +3,20 @@
 
     
     <url>
+      <loc>https://tboox.org/2024/04/22/xmake-update-v2.9.1/</loc>
+      <changefreq>daily</changefreq>
+      <lastmod>2024-04-22T00:00:00+08:00</lastmod>
+      <priority>1.0</priority>
+    </url>
+    
+    <url>
+      <loc>https://tboox.org/cn/2024/04/22/xmake-update-v2.9.1/</loc>
+      <changefreq>daily</changefreq>
+      <lastmod>2024-04-22T00:00:00+08:00</lastmod>
+      <priority>1.0</priority>
+    </url>
+    
+    <url>
       <loc>https://tboox.org/2024/02/25/xmake-update-v2.8.7/</loc>
       <changefreq>daily</changefreq>
       <lastmod>2024-02-25T00:00:00+08:00</lastmod>

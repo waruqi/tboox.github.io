@@ -5,9 +5,682 @@
     <description>Focus on cross-platform development using c language</description>
     <link>https://tboox.org/</link>
     <atom:link href="https://tboox.org/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Mon, 26 Feb 2024 09:44:42 +0800</pubDate>
-    <lastBuildDate>Mon, 26 Feb 2024 09:44:42 +0800</lastBuildDate>
+    <pubDate>Mon, 22 Apr 2024 15:00:13 +0800</pubDate>
+    <lastBuildDate>Mon, 22 Apr 2024 15:00:13 +0800</lastBuildDate>
     <generator>Jekyll v3.1.0</generator>
+    
+      <item>
+        <title>Xmake v2.9.1 released, Add native lua modules support</title>
+        <description>&lt;p&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;Xmake&lt;/a&gt; is a lightweight cross-platform build utility based on Lua.&lt;/p&gt;
+
+&lt;p&gt;It is very lightweight and has no dependencies because it has a built-in Lua runtime.&lt;/p&gt;
+
+&lt;p&gt;It uses xmake.lua to maintain project builds and its configuration syntax is very simple and readable.&lt;/p&gt;
+
+&lt;p&gt;We can use it to build project directly like Make/Ninja, or generate project files like CMake/Meson, and it also has a built-in package management system to help users solve the integrated use of C/C++ dependent libraries.&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake = Build backend + Project Generator + Package Manager + [Remote|Distributed] Build + Cache
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Although not very precise, we can still understand Xmake in the following way:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake ≈ Make/Ninja + CMake/Meson + Vcpkg/Conan + distcc + ccache/sccache
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;Github&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://xmake.io/&quot;&gt;Document&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;introduction-of-new-features&quot;&gt;Introduction of new features&lt;/h2&gt;
+
+&lt;p&gt;In the new version, we have added native tool chain support for Hongmeng system and implemented a new native Lua module import support. In addition, we have also made a lot of optimizations to the build speed, and the effect is very obvious.&lt;/p&gt;
+
+&lt;h3 id=&quot;add-hongmeng-sdk-tool-chain-support&quot;&gt;Add Hongmeng SDK tool chain support&lt;/h3&gt;
+
+&lt;p&gt;We have added native toolchain compilation support for the Hongmeng OS platform:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;gp&quot;&gt;$ &lt;/span&gt;xmake f -p harmony
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;xmake will also automatically detect the default SDK path. Of course, we can also specify the Harmony SDK path.&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;gp&quot;&gt;$ &lt;/span&gt;xmake f -p Harmony --sdk&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;/Users/ruki/Library/Huawei/Sdk/...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;add-native-module-support&quot;&gt;Add native module support&lt;/h3&gt;
+
+&lt;p&gt;We know that in xmake, you can import some lua modules through the import interface for use in the script domain. However, if the operation of some modules is time-consuming, then lua implementation is not an ideal choice.
+Therefore, in the new version, we have added support for the native lua module, which can be implemented through native to achieve speed-up optimization. Moreover, importing and using the module is as simple as the lua module.&lt;/p&gt;
+
+&lt;p&gt;When using native modules, xmake will perform two stages of compilation. First, it will automatically compile the native module, and then import the module into lua as a library or binary. For users, they only need to call import to import.&lt;/p&gt;
+
+&lt;h4 id=&quot;define-dynamic-library-module&quot;&gt;Define dynamic library module&lt;/h4&gt;
+
+&lt;p&gt;The advantage of the dynamic library module is that it not only achieves performance acceleration through native, but also avoids the creation of additional sub-processes for each call, making it more lightweight and further improving the speed.&lt;/p&gt;
+
+&lt;p&gt;We can first define a dynamic library module, which fully supports all C APIs of Lua, so we can also directly introduce some third-party open source Lua native modules for use.&lt;/p&gt;
+
+&lt;p&gt;Here we also have a complete example of importing the lua-cjson module for reference: &lt;a href=&quot;https://github.com/xmake-io/xmake/tree/master/tests/projects/other/native_module_cjson&quot;&gt;native_module_cjson&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;First, we first implement the shared native code, so the interface is exported through the lua API.&lt;/p&gt;
+
+&lt;p&gt;./modules/foo/foo.c&lt;/p&gt;
+
+&lt;div class=&quot;language-c++ highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;#include &amp;lt;xmi.h&amp;gt;
+&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;c_add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua_State&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+     &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;lua_pushinteger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;c_sub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua_State&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+     &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;lua_pushinteger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;luaopen&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;foo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_State&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+     &lt;span class=&quot;c1&quot;&gt;//Collect add and sub
+&lt;/span&gt;     &lt;span class=&quot;k&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;luaL_Reg&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;funcs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+         &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;add&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;c_add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;
+         &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;sub&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;c_sub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;
+         &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+     &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;lua_newtable&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;c1&quot;&gt;// pass function list
+&lt;/span&gt;     &lt;span class=&quot;n&quot;&gt;luaL_setfuncs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;funcs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Notice here that we have included an interface header file of &lt;code class=&quot;highlighter-rouge&quot;&gt;xmi.h&lt;/code&gt;. In fact, we can also directly introduce &lt;code class=&quot;highlighter-rouge&quot;&gt;lua.h&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;luaconf.h&lt;/code&gt;. The effect is the same, but it will provide better cross-platform performance. , it will automatically handle the differences between lua/luajit and versions internally.&lt;/p&gt;
+
+&lt;p&gt;Then, we configure &lt;code class=&quot;highlighter-rouge&quot;&gt;add_rules(&quot;modules.shared&quot;)&lt;/code&gt; to compile as a shared native module without introducing any other dependencies.&lt;/p&gt;
+
+&lt;p&gt;Even Lua dependencies do not need to be introduced, because the xmake main program has exported all Lua interfaces and can be used directly, so the entire module is very lightweight.&lt;/p&gt;
+
+&lt;p&gt;./modules/foo/xmake.lua&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;c1&quot;&gt;-- Specify the target as the library lua module&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;module.shared&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo.c&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;define-binary-module&quot;&gt;Define binary module&lt;/h4&gt;
+
+&lt;p&gt;In addition to the dynamic library module, we also provide the import of another binary module. It is actually an executable file. Every time the module interface is called, a child process will be called.&lt;/p&gt;
+
+&lt;p&gt;So what are the benefits of it? Although it is not as efficient as the dynamic library module, its module implementation is simpler. There is no need to call the lua API. It only needs to process the parameter data and output the return value through stdout.&lt;/p&gt;
+
+&lt;p&gt;In addition, compared to binary distribution, it is distributed through source code, so it also solves the cross-platform problem.&lt;/p&gt;
+
+&lt;p&gt;Whether to use a dynamic library module or a binary module depends on your needs. If you want a simple implementation, you can consider a binary module. If you want to be efficient, use a dynamic library module.&lt;/p&gt;
+
+&lt;p&gt;In addition, if you need to speed up through parallel execution, you can also use binary modules.&lt;/p&gt;
+
+&lt;p&gt;./modules/bar/bar.cpp&lt;/p&gt;
+
+&lt;div class=&quot;language-c++ highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;#include &amp;lt;stdio.h&amp;gt;
+#include &amp;lt;stdlib.h&amp;gt;
+#include &amp;lt;cstdlib&amp;gt;
+&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+     &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;atoi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]);&lt;/span&gt;
+     &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;atoi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]);&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;printf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;%d&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;./modules/bar/xmake.lua&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;add&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;c1&quot;&gt;-- Specify the target as a binary lua module&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;module.binary&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bar.cpp&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;import-native-module&quot;&gt;Import native module&lt;/h4&gt;
+
+&lt;p&gt;For module import, we only need to call import, which is exactly the same as importing lua modules.&lt;/p&gt;
+
+&lt;p&gt;./xmake.lua&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;--Add native modules in the ./modules directory&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;add_moduledirs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;modules&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;set_kind&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;phony&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;on_load&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;function&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+         &lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;always_build&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;
+         &lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bar&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+         &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo: 1 + 1 = %s&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;foo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+         &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo: 1 - 1 = %s&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;foo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+         &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bar: 1 + 1 = %s&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;bar&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Since the construction of the plug-in module is completely independent from the main project, the native module will only be built once. If you want to trigger incremental plug-in compilation, you need to configure &lt;code class=&quot;highlighter-rouge&quot;&gt;always_build = true&lt;/code&gt;, so that xmake will detect it every time Check whether the plug-in code has been changed. If so, the plug-in will be automatically incrementally built.&lt;/p&gt;
+
+&lt;p&gt;The first execution effect is as follows:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;ruki-2:native_module ruki&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;xmake
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;50%]: cache compiling.release src/foo.c
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;50%]: cache compiling.release src/bar.c
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;75%]: linking.release libmodule_foo.dylib
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;75%]: linking.release module_bar
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;100%]: build ok, spent 1.296s
+foo: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+foo: 1 - 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+bar: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;100%]: build ok, spent 0.447s
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;When executed for the second time, the plug-in will not be built and the module can be used directly:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;ruki-2:native_module ruki&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;xmake
+foo: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+foo: 1 - 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+bar: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;100%]: build ok, spent 0.447s
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;use-as-codegen&quot;&gt;Use as codegen&lt;/h4&gt;
+
+&lt;p&gt;Through the new native module feature, we can also use it to implement auto-codegen, and then continue to execute the subsequent compilation process based on the automatically generated code.&lt;/p&gt;
+
+&lt;p&gt;There is also a complete example here for reference: &lt;a href=&quot;https://github.com/xmake-io/xmake/tree/master/tests/projects/other/autogen_shared_module&quot;&gt;autogen_shared_module&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h3 id=&quot;add-signal-module&quot;&gt;Add signal module&lt;/h3&gt;
+
+&lt;p&gt;In the new version, we have also added a new signal registration interface. We can register signal processing functions such as SIGINT at the Lua layer to customize the response logic.&lt;/p&gt;
+
+&lt;h4 id=&quot;signalregister&quot;&gt;signal.register&lt;/h4&gt;
+
+&lt;p&gt;This interface is used to register signal processors. Currently, it only supports the processing of SIGINT signals. It also supports mainstream platforms such as windows.&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;core.base.signal&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;register&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+         &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;signal.SIGINT(%d)&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;signo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;nb&quot;&gt;io.read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;This is useful when some sub-processes internally shield SIGINT, causing them to freeze and not exit. Even if the user presses &lt;code class=&quot;highlighter-rouge&quot;&gt;Ctrl+C&lt;/code&gt; to exit the xmake process, it does not exit.
+We can force it out in this way.&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;core.base.process&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;core.base.signal&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+     &lt;span class=&quot;kd&quot;&gt;local&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;register&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+         &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;sigint&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+         &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;then&lt;/span&gt;
+             &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kill&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+         &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;process&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;open&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;./trap.sh&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;then&lt;/span&gt;
+         &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;wait&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+         &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;close&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+     &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;For the background of this issue, please refer to: &lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4889&quot;&gt;#4889&lt;/a&gt;&lt;/p&gt;
+
+&lt;h4 id=&quot;signalignore&quot;&gt;signal.ignore&lt;/h4&gt;
+
+&lt;p&gt;We can also ignore the processing of blocking a certain signal through the &lt;code class=&quot;highlighter-rouge&quot;&gt;signal.ignore&lt;/code&gt; interface.&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ignore&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;signalreset&quot;&gt;signal.reset&lt;/h4&gt;
+
+&lt;p&gt;We can also clear the processing function of a certain signal and fall back to the default processing logic.&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;reset&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;add-support-for-cppfronth2&quot;&gt;Add support for cppfront/h2&lt;/h3&gt;
+
+&lt;p&gt;We’ve also improved support for the latest version of cppfront. The new version of cppfront added new .h2 header files, so we also added support for it.&lt;/p&gt;
+
+&lt;p&gt;Thanks for the contribution from @shaoxie1986&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;add_requires&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cppfront&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cppfront&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;set_kind&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;binary&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src/*.cpp2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src/*.h2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+     &lt;span class=&quot;n&quot;&gt;add_packages&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cppfront&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;improve-build-speed&quot;&gt;Improve build speed&lt;/h3&gt;
+
+&lt;p&gt;In the new version, we have also fixed an issue related to parallel builds. After restructuring the scheduler, the build speed has been significantly improved. Especially in incremental compilation scenarios where cpp file compilation takes very slow time, the effect is more obvious.&lt;/p&gt;
+
+&lt;p&gt;For relevant background, see: &lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4928&quot;&gt;#4928&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h2 id=&quot;changelog&quot;&gt;Changelog&lt;/h2&gt;
+
+&lt;h3 id=&quot;new-features&quot;&gt;New features&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4874&quot;&gt;#4874&lt;/a&gt;: Add Harmony SDK support&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4889&quot;&gt;#4889&lt;/a&gt;: Add signal module to register signal handler in lua&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4925&quot;&gt;#4925&lt;/a&gt;: Add native modules support&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4938&quot;&gt;#4938&lt;/a&gt;: Support for cppfront/h2&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;changes&quot;&gt;Changes&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Improve packages to support for clang-cl&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4893&quot;&gt;#4893&lt;/a&gt;: Improve rc includes deps&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4928&quot;&gt;#4928&lt;/a&gt;: Improve to build and link speed&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4931&quot;&gt;#4931&lt;/a&gt;: Update pdcurses&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4973&quot;&gt;#4973&lt;/a&gt;: Improve to select script&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;bugs-fixed&quot;&gt;Bugs fixed&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4882&quot;&gt;#4882&lt;/a&gt;: Fix install deps with –group&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4877&quot;&gt;#4877&lt;/a&gt;: Fix compile error for xpack with unity build&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4887&quot;&gt;#4887&lt;/a&gt;: Fix object deps&lt;/li&gt;
+&lt;/ul&gt;
+
+</description>
+        <pubDate>Mon, 22 Apr 2024 00:00:00 +0800</pubDate>
+        <link>https://tboox.org/2024/04/22/xmake-update-v2.9.1/</link>
+        <guid isPermaLink="true">https://tboox.org/2024/04/22/xmake-update-v2.9.1/</guid>
+        
+        <category>xmake</category>
+        
+        <category>lua</category>
+        
+        <category>C/C++</category>
+        
+        <category>package</category>
+        
+        <category>cosmocc</category>
+        
+        
+        <category>xmake</category>
+        
+      </item>
+    
+      <item>
+        <title>Xmake v2.9.1 发布，新增 native lua 模块和鸿蒙系统支持</title>
+        <description>&lt;p&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;Xmake&lt;/a&gt; 是一个基于 Lua 的轻量级跨平台构建工具。&lt;/p&gt;
+
+&lt;p&gt;它非常的轻量，没有任何依赖，因为它内置了 Lua 运行时。&lt;/p&gt;
+
+&lt;p&gt;它使用 xmake.lua 维护项目构建，相比 makefile/CMakeLists.txt，配置语法更加简洁直观，对新手非常友好，短时间内就能快速入门，能够让用户把更多的精力集中在实际的项目开发上。&lt;/p&gt;
+
+&lt;p&gt;我们能够使用它像 Make/Ninja 那样可以直接编译项目，也可以像 CMake/Meson 那样生成工程文件，另外它还有内置的包管理系统来帮助用户解决 C/C++ 依赖库的集成使用问题。&lt;/p&gt;
+
+&lt;p&gt;目前，Xmake 主要用于 C/C++ 项目的构建，但是同时也支持其他 native 语言的构建，可以实现跟 C/C++ 进行混合编译，同时编译速度也是非常的快，可以跟 Ninja 持平。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake = Build backend + Project Generator + Package Manager + [Remote|Distributed] Build + Cache
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;尽管不是很准确，但我们还是可以把 Xmake 按下面的方式来理解：&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake ≈ Make/Ninja + CMake/Meson + Vcpkg/Conan + distcc + ccache/sccache
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;项目源码&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://xmake.io/#/zh-cn/&quot;&gt;官方文档&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://xmake.io/#/zh-cn/about/course&quot;&gt;入门课程&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;新特性介绍&quot;&gt;新特性介绍&lt;/h2&gt;
+
+&lt;p&gt;新版本中，我们新增了鸿蒙系统的 native 工具链支持，并且实现了一种新的 native 原生 lua 模块的导入支持。另外，我们也对构建速度做了很多的优化，效果非常明显。&lt;/p&gt;
+
+&lt;h3 id=&quot;添加鸿蒙-sdk-工具链支持&quot;&gt;添加鸿蒙 SDK 工具链支持&lt;/h3&gt;
+
+&lt;p&gt;我们新增了鸿蒙 OS 平台的 native 工具链编译支持：&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;gp&quot;&gt;$ &lt;/span&gt;xmake f -p harmony
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;xmake 也会自动探测默认的 SDK 路径，当然我们也可以指定 Harmony SDK 路径。&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;gp&quot;&gt;$ &lt;/span&gt;xmake f -p Harmony --sdk&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;/Users/ruki/Library/Huawei/Sdk/...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;添加-native-模块支持&quot;&gt;添加 native 模块支持&lt;/h3&gt;
+
+&lt;p&gt;我们知道，在 xmake 中，可以通过 import 接口去导入一些 lua 模块在脚本域中使用，但是如果一些模块的操作比较耗时，那么 lua 实现并不是理想的选择。
+因此，新版本中，我们新增了 native lua 模块的支持，可以通过 native 实现，来达到提速优化的效果，并且模块导入和使用，还是跟 lua 模块一样简单。&lt;/p&gt;
+
+&lt;p&gt;使用原生模块时，xmake 会进行两段编译，先会自动编译原生模块，后将模块导入 lua 作为库或二进制，而对于用户，仅仅只需要调用 import 导入即可。&lt;/p&gt;
+
+&lt;h4 id=&quot;定义动态库模块&quot;&gt;定义动态库模块&lt;/h4&gt;
+
+&lt;p&gt;动态库模块的好处是，不仅仅通过 native 实现了性能加速，另外避免了每次调用额外的子进程创建，因此更加的轻量，速度进一步得到提升。&lt;/p&gt;
+
+&lt;p&gt;我们可以先定义一个动态库模块，里面完全支持 lua 的所有 c API，因此我们也可以将一些第三方的开源 lua native 模块直接引入进来使用。&lt;/p&gt;
+
+&lt;p&gt;这里我们也有一个完整的导入 lua-cjson 模块的例子可以参考：&lt;a href=&quot;https://github.com/xmake-io/xmake/tree/master/tests/projects/other/native_module_cjson&quot;&gt;native_module_cjson&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;首先，我们先实现 shared 的 native 代码，所以接口通过 lua API 导出。&lt;/p&gt;
+
+&lt;p&gt;./modules/foo/foo.c&lt;/p&gt;
+
+&lt;div class=&quot;language-c++ highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;#include &amp;lt;xmi.h&amp;gt;
+&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;c_add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua_State&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;lua_pushinteger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;c_sub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua_State&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_tointeger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;lua_pushinteger&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;luaopen&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;foo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua_State&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// 收集add和sub
+&lt;/span&gt;    &lt;span class=&quot;k&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;luaL_Reg&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;funcs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;add&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;c_add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;
+        &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;sub&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;c_sub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;
+        &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;lua_newtable&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// 传递函数列表
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;luaL_setfuncs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lua&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;funcs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;注意到这里，我们 include 了一个 &lt;code class=&quot;highlighter-rouge&quot;&gt;xmi.h&lt;/code&gt; 的接口头文件，其实我们也可以直接引入 &lt;code class=&quot;highlighter-rouge&quot;&gt;lua.h&lt;/code&gt;，&lt;code class=&quot;highlighter-rouge&quot;&gt;luaconf.h&lt;/code&gt;，效果是一样的，但是会提供更好的跨平台性，内部会自动处理 lua/luajit还有版本间的差异。&lt;/p&gt;
+
+&lt;p&gt;然后，我们配置 &lt;code class=&quot;highlighter-rouge&quot;&gt;add_rules(&quot;modules.shared&quot;)&lt;/code&gt; 作为 shared native 模块来编译，不需要引入任何其他依赖。&lt;/p&gt;
+
+&lt;p&gt;甚至连 lua 的依赖也不需要引入，因为 xmake 主程序已经对其导出了所有的 lua 接口，可直接使用，所以整个模块是非常轻量的。&lt;/p&gt;
+
+&lt;p&gt;./modules/foo/xmake.lua&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;-- 指定目标为库lua模块&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;module.shared&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo.c&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;定义二进制模块&quot;&gt;定义二进制模块&lt;/h4&gt;
+
+&lt;p&gt;出了动态库模块，我们还提供了另外一种二进制模块的导入。它其实就是一个可执行文件，每次调用模块接口，都会去调用一次子进程。&lt;/p&gt;
+
+&lt;p&gt;那它有什么好处呢，尽管它没有动态库模块那么高效，但是它的模块实现更加的简单，不需要调用 lua API，仅仅只需要处理参数数据，通过 stdout 去输出返回值即可。&lt;/p&gt;
+
+&lt;p&gt;另外，相比二进制分发，它是通过源码分发的，因此也解决了跨平台的问题。&lt;/p&gt;
+
+&lt;p&gt;具体是使用动态库模块，还是二进制模块，具体看自己的需求，如果想要实现简单，可以考虑二进制模块，如果想要高效，就用动态库模块。&lt;/p&gt;
+
+&lt;p&gt;另外，如果需要通过并行执行来提速，也可以使用二进制模块。&lt;/p&gt;
+
+&lt;p&gt;./modules/bar/bar.cpp&lt;/p&gt;
+
+&lt;div class=&quot;language-c++ highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;#include &amp;lt;stdio.h&amp;gt;
+#include &amp;lt;stdlib.h&amp;gt;
+#include &amp;lt;cstdlib&amp;gt;
+&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;atoi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]);&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;atoi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;printf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;%d&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;./modules/bar/xmake.lua&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;add&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;-- 指定目标为二进制lua模块&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;module.binary&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bar.cpp&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;导入原生模块&quot;&gt;导入原生模块&lt;/h4&gt;
+
+&lt;p&gt;对于模块导入，我们仅仅需要调用 import，跟导入 lua 模块的用法完全一致。&lt;/p&gt;
+
+&lt;p&gt;./xmake.lua&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;-- 添加./modules目录内原生模块&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;add_moduledirs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;modules&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;set_kind&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;phony&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;on_load&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;function&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;always_build&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bar&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo: 1 + 1 = %s&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;foo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;foo: 1 - 1 = %s&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;foo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bar: 1 + 1 = %s&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;bar&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;add&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;由于插件模块的构建是跟主工程完全独立的，因此，native 模块只会被构建一次，如果想要触发增量的插件编译，需要配置上 &lt;code class=&quot;highlighter-rouge&quot;&gt;always_build = true&lt;/code&gt;，这样，xmake 就会每次检测插件代码是否有改动，如果有改动，会自动增量构建插件。&lt;/p&gt;
+
+&lt;p&gt;首次执行效果如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;ruki-2:native_module ruki&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;xmake
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; 50%]: cache compiling.release src/foo.c
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; 50%]: cache compiling.release src/bar.c
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; 75%]: linking.release libmodule_foo.dylib
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; 75%]: linking.release module_bar
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;100%]: build ok, spent 1.296s
+foo: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+foo: 1 - 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+bar: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;100%]: build ok, spent 0.447s
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;第二次执行，就不会再构建插件，可以直接使用模块：&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;ruki-2:native_module ruki&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;xmake
+foo: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+foo: 1 - 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+bar: 1 + 1 &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 2
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;100%]: build ok, spent 0.447s
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;作为-codegen-来使用&quot;&gt;作为 codegen 来使用&lt;/h4&gt;
+
+&lt;p&gt;通过新的 native 模块特性，我们也可以用来实现 auto-codegen，然后根据自动生成的代码，继续执行后续编译流程。&lt;/p&gt;
+
+&lt;p&gt;这里也有完整的例子可以参考：&lt;a href=&quot;https://github.com/xmake-io/xmake/tree/master/tests/projects/other/autogen_shared_module&quot;&gt;autogen_shared_module&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h3 id=&quot;添加-signal-模块&quot;&gt;添加 signal 模块&lt;/h3&gt;
+
+&lt;p&gt;新版本中，我们还新增了信号注册接口，我们可以在 lua 层，注册 SIGINT 等信号处理函数，来定制化响应逻辑。&lt;/p&gt;
+
+&lt;h4 id=&quot;signalregister&quot;&gt;signal.register&lt;/h4&gt;
+
+&lt;p&gt;这个接口用于注册信号处理器，目前仅仅支持 SIGINT 信号的处理，同时它也是支持 windows 等主流平台的。&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;core.base.signal&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;register&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;signal.SIGINT(%d)&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;signo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;io.read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;这对于当一些子进程内部屏蔽了 SIGINT，导致卡死不退出，即使用户按了 &lt;code class=&quot;highlighter-rouge&quot;&gt;Ctrl+C&lt;/code&gt; 退出了 xmake 进程，它也没有退出时候，
+我们就可以通过这种方式去强制退掉它。&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;core.base.process&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;import&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;core.base.signal&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;local&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;register&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;sigint&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;then&lt;/span&gt;
+            &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kill&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;process&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;open&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;./trap.sh&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;then&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;wait&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;proc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;close&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;关于这个问题的背景，可以参考：&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4889&quot;&gt;#4889&lt;/a&gt;&lt;/p&gt;
+
+&lt;h4 id=&quot;signalignore&quot;&gt;signal.ignore&lt;/h4&gt;
+
+&lt;p&gt;我们也可以通过 &lt;code class=&quot;highlighter-rouge&quot;&gt;signal.ignore&lt;/code&gt; 这个接口，去忽略屏蔽某个信号的处理。&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ignore&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h4 id=&quot;signalreset&quot;&gt;signal.reset&lt;/h4&gt;
+
+&lt;p&gt;我们也可以清除某个信号的处理函数，回退到默认的处理逻辑。&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;reset&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;signal&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SIGINT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;增加对-cppfronth2-的支持&quot;&gt;增加对 cppfront/h2 的支持&lt;/h3&gt;
+
+&lt;p&gt;我们还改进了对 cppfront 的最新版本支持，而新版本的 cppfront 增加了 .h2 头文件的处理，因此我们也增加了对它的支持。&lt;/p&gt;
+
+&lt;p&gt;感谢来自 @shaoxie1986 的贡献。、&lt;/p&gt;
+
+&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;add_requires&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cppfront&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cppfront&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;set_kind&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;binary&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src/*.cpp2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src/*.h2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;add_packages&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cppfront&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;改进构建速度&quot;&gt;改进构建速度&lt;/h3&gt;
+
+&lt;p&gt;新版本中，我们还修复一个并行构建相关的问题，经过对调度器的重构，构建速度得到明显的提升，尤其在 cpp 文件编译耗时非常慢的增量编译场景，效果更为明显。&lt;/p&gt;
+
+&lt;p&gt;相关背景见：&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4928&quot;&gt;#4928&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;更新日志&quot;&gt;更新日志&lt;/h2&gt;
+
+&lt;h3 id=&quot;新特性&quot;&gt;新特性&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4874&quot;&gt;#4874&lt;/a&gt;: 添加鸿蒙 SDK 支持&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4889&quot;&gt;#4889&lt;/a&gt;: 添加 signal 模块 去注册信号处理&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4925&quot;&gt;#4925&lt;/a&gt;: 添加 native 模块支持&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4938&quot;&gt;#4938&lt;/a&gt;: 增加对 cppfront/h2 的支持&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;改进&quot;&gt;改进&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;改进包管理，支持切换 clang-cl&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4893&quot;&gt;#4893&lt;/a&gt;: 改进 rc 头文件依赖检测&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4928&quot;&gt;#4928&lt;/a&gt;: 改进构建和链接速度，增量编译时候效果更加明显&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4931&quot;&gt;#4931&lt;/a&gt;: 更新 pdcurses&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4973&quot;&gt;#4973&lt;/a&gt;: 改进选择脚本的匹配模式&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;bugs-修复&quot;&gt;Bugs 修复&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4882&quot;&gt;#4882&lt;/a&gt;: 修复安装组依赖问题&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4877&quot;&gt;#4877&lt;/a&gt;: 修复 xpack 打包时，unit build 编译失败问题&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4887&quot;&gt;#4887&lt;/a&gt;: 修复 object 依赖链接&lt;/li&gt;
+&lt;/ul&gt;
+
+</description>
+        <pubDate>Mon, 22 Apr 2024 00:00:00 +0800</pubDate>
+        <link>https://tboox.org/cn/2024/04/22/xmake-update-v2.9.1/</link>
+        <guid isPermaLink="true">https://tboox.org/cn/2024/04/22/xmake-update-v2.9.1/</guid>
+        
+        <category>xmake</category>
+        
+        <category>lua</category>
+        
+        <category>C/C++</category>
+        
+        
+        <category>xmake</category>
+        
+      </item>
     
       <item>
         <title>Xmake v2.8.7 released, Add cosmocc toolchain support, build-once run-anywhere</title>
@@ -3916,527 +4589,6 @@ only rebuild foo
         <pubDate>Tue, 26 Sep 2023 00:00:00 +0800</pubDate>
         <link>https://tboox.org/cn/2023/09/26/xmake-update-v2.8.3/</link>
         <guid isPermaLink="true">https://tboox.org/cn/2023/09/26/xmake-update-v2.8.3/</guid>
-        
-        <category>xmake</category>
-        
-        <category>lua</category>
-        
-        <category>C/C++</category>
-        
-        <category>package</category>
-        
-        <category>API</category>
-        
-        <category>rust</category>
-        
-        
-        <category>xmake</category>
-        
-      </item>
-    
-      <item>
-        <title>Xmake v2.8.2 Released, Official package repository count over 1k</title>
-        <description>&lt;p&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;Xmake&lt;/a&gt; is a lightweight cross-platform build utility based on Lua.&lt;/p&gt;
-
-&lt;p&gt;It is very lightweight and has no dependencies because it has a built-in Lua runtime.&lt;/p&gt;
-
-&lt;p&gt;It uses xmake.lua to maintain project builds and its configuration syntax is very simple and readable.&lt;/p&gt;
-
-&lt;p&gt;We can use it to build project directly like Make/Ninja, or generate project files like CMake/Meson, and it also has a built-in package management system to help users solve the integrated use of C/C++ dependent libraries.&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake = Build backend + Project Generator + Package Manager + [Remote|Distributed] Build + Cache
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;Although not very precise, we can still understand Xmake in the following way:&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake ≈ Make/Ninja + CMake/Meson + Vcpkg/Conan + distcc + ccache/sccache
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;Github&lt;/a&gt;&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://xmake.io/&quot;&gt;Document&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;&lt;img src=&quot;https://github.com/xmake-io/xmake-docs/raw/master/assets/img/index/package.gif&quot; width=&quot;650px&quot; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&quot;introduction-of-new-features&quot;&gt;Introduction of new features&lt;/h2&gt;
-
-&lt;p&gt;In this release, we’ve added a number of useful APIs, removed some interfaces that were marked as deprecated a few years ago, and improved soname support for dynamic libraries.&lt;/p&gt;
-
-&lt;p&gt;Meanwhile, we’ve had some good news in the meantime: our &lt;a href=&quot;https://github.com/xmake-io/xmake-repo&quot;&gt;xmake-repo&lt;/a&gt; official repository has surpassed 1k packages, thanks to every contributor to Xmake, which is basically a repository of packages contributed by the community.&lt;/p&gt;
-
-&lt;p&gt;Especially @xq114, @star-hengxing, @SirLynix contributed a lot of packages, thank you very much~.&lt;/p&gt;
-
-&lt;p&gt;Also, the Xmake repository commits have reached 12k, and have been iterating rapidly. Here’s a brief introduction to some of the major updates in the new version.&lt;/p&gt;
-
-&lt;h3 id=&quot;add-soname-support&quot;&gt;Add soname support&lt;/h3&gt;
-
-&lt;p&gt;In this release, we have added soname version support to the &lt;code class=&quot;highlighter-rouge&quot;&gt;set_version&lt;/code&gt; interface, which is used to control the version compatibility of the so/dylib dynamic library.&lt;/p&gt;
-
-&lt;p&gt;You can configure the soname version suffix, and xmake will automatically generate a symbolic link to execute the specified version of the library when compiling and installing it.&lt;/p&gt;
-
-&lt;p&gt;For example, if we configure:&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;xmake will automatically resolve the major version of the version number as the soname version, generating the following structure:&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;└── lib
-    ├── libfoo.1.0.1.dylib
-    ├── libfoo.1.0.1.dylib -&amp;gt; libfoo.1.0.1.dylib
-    └── libfoo.dylib -&amp;gt; libfoo.1.dylib
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;Of course, we can also specify soname to a specific version naming:&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;1.0&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;A&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;And if soname is not set, then soname version control is not enabled by default:&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;improve-the-add_vectorexts-interface&quot;&gt;Improve the add_vectorexts interface&lt;/h3&gt;
-
-&lt;p&gt;The add_vectorexts interface is mainly used to add extended instruction optimisation options, and currently supports the following extended instruction sets:&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mmx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;neon&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;avx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;avx2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;avx512&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;sse&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;sse2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;sse3&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;sse3&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;sse4.2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;Where &lt;code class=&quot;highlighter-rouge&quot;&gt;avx512&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;sse4.2&lt;/code&gt; are new directive configurations added to our new version, and we have also added a new &lt;code class=&quot;highlighter-rouge&quot;&gt;all&lt;/code&gt; configuration item that can be used to turn on all extended directive optimisations as much as possible.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;all&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;new-set_encodings-interface&quot;&gt;New set_encodings interface&lt;/h3&gt;
-
-&lt;p&gt;This new interface is mainly used to set the encoding of source and target executables.&lt;/p&gt;
-
-&lt;p&gt;By default, if we just specify the encoding, it will work for both the source and target files.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;-- for all source/target encodings&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;-- msvc: /utf-8&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;It is equivalent to:&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;source:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;target:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;And it only supports utf-8 encodings for now, but will be expanded in the future.&lt;/p&gt;
-
-&lt;p&gt;If we just want to set the source file encoding or target file encoding individually, we can do that too.&lt;/p&gt;
-
-&lt;h4 id=&quot;set-source-encoding&quot;&gt;Set source encoding&lt;/h4&gt;
-
-&lt;p&gt;Usually this refers to the encoding of the source file of the compiled code, and we can set it like this.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;-- gcc/clang: -finput-charset=UTF-8, msvc: -source-charset=utf-8&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;source:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h4 id=&quot;set-the-target-file-encoding&quot;&gt;Set the target file encoding&lt;/h4&gt;
-
-&lt;p&gt;It usually refers to the runtime output encoding of the target executable.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;-- gcc/clang: -fexec-charset=UTF-8, msvc: -target-charset=utf-8&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;target:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;new-add_forceincludes-interface&quot;&gt;New add_forceincludes interface&lt;/h3&gt;
-
-&lt;p&gt;We have also added the &lt;code class=&quot;highlighter-rouge&quot;&gt;add_forceincludes&lt;/code&gt; interface, which can be used to force the addition of &lt;code class=&quot;highlighter-rouge&quot;&gt;includes&lt;/code&gt; headers directly in the configuration file.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;It works like &lt;code class=&quot;highlighter-rouge&quot;&gt;#include &amp;lt;config.h&amp;gt;&lt;/code&gt;, but you don’t need to add it explicitly in the source code.&lt;/p&gt;
-
-&lt;p&gt;Also, its search path is controlled by &lt;code class=&quot;highlighter-rouge&quot;&gt;add_includedirs&lt;/code&gt; instead of the direct config file path.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_includedirs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;By default &lt;code class=&quot;highlighter-rouge&quot;&gt;add_forceincludes&lt;/code&gt; matches c/c++/objc, if you just want to match c++ you can do so:&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcekinds&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;cxx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;If you want to match multiple source file types at the same time, that’s also possible:&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcekinds&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cxx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mxx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}})&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;For gcc it sets the &lt;code class=&quot;highlighter-rouge&quot;&gt;-include config.h&lt;/code&gt; flag, for msvc it sets the &lt;code class=&quot;highlighter-rouge&quot;&gt;-FI config.h&lt;/code&gt; flag.&lt;/p&gt;
-
-&lt;h3 id=&quot;new-add_extrafiles-interface&quot;&gt;New add_extrafiles interface&lt;/h3&gt;
-
-&lt;p&gt;In previous versions, if we wanted to add extra files to the project list in the vs/vsxmake project builder, we could only add them via &lt;code class=&quot;highlighter-rouge&quot;&gt;add_headerfiles&lt;/code&gt;, but that was a bit of a Hack.&lt;/p&gt;
-
-&lt;p&gt;Therefore, we have added the &lt;code class=&quot;highlighter-rouge&quot;&gt;add_extrafiles&lt;/code&gt; interface specifically for configuring extra files to the project so that the user can also edit them with a quick click.&lt;/p&gt;
-
-&lt;p&gt;These added files are not code files, they are not compiled, they are not installed, they are just a way for the user to quickly edit and access them in the generated project IDE.&lt;/p&gt;
-
-&lt;p&gt;In the future, we may use this interface for other things as well.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_extrafiles&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;assets/other.txt&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;sdasstm8-assembler-support&quot;&gt;sdasstm8 assembler support&lt;/h3&gt;
-
-&lt;p&gt;@lanjackg2003 helped contribute sdcc/sdasstm8 assembler support, many thanks.&lt;/p&gt;
-
-&lt;p&gt;Related patch, &lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4071&quot;&gt;#4071&lt;/a&gt;&lt;/p&gt;
-
-&lt;h3 id=&quot;improve-rust-cross-compilation-support&quot;&gt;Improve Rust cross-compilation support&lt;/h3&gt;
-
-&lt;p&gt;In this new release, we’ve also improved our Rust project builds by adding cross-compilation support, including cross-compilation of dependent packages.&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_arch&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;aarch64-unknown-none&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_requires&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cargo::test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;configs&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;main&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cargo_toml&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;cargo_toml&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;join&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;projectdir&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(),&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Cargo.toml&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)}}))&lt;/span&gt;
-
-&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;set_kind&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;binary&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src/main.rs&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;add_packages&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cargo::test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;For example, in the project configuration above, we can cross-compile dependent packages, as well as our own project, by globally modifying the compilation architecture with &lt;code class=&quot;highlighter-rouge&quot;&gt;set_arch(&quot;aarch64-unknown-none&quot;)&lt;/code&gt;.&lt;/p&gt;
-
-&lt;p&gt;If you don’t have &lt;code class=&quot;highlighter-rouge&quot;&gt;set_arch&lt;/code&gt; configured, you can also dynamically switch compilation architectures with the command &lt;code class=&quot;highlighter-rouge&quot;&gt;xmake f -a aarch64-unknown-none; xmake&lt;/code&gt;.&lt;/p&gt;
-
-&lt;p&gt;Of course, don’t forget to run &lt;code class=&quot;highlighter-rouge&quot;&gt;rustup target add aarch64-unknown-none&lt;/code&gt; to install the corresponding target first.&lt;/p&gt;
-
-&lt;p&gt;For more context, see &lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4049&quot;&gt;#4049&lt;/a&gt;.&lt;/p&gt;
-
-&lt;h2 id=&quot;changelog&quot;&gt;Changelog&lt;/h2&gt;
-
-&lt;h3 id=&quot;new-features&quot;&gt;New features&lt;/h3&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4002&quot;&gt;#4002&lt;/a&gt;: Add soname and version support&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/1613&quot;&gt;#1613&lt;/a&gt;: Add avx512 and sse4.2 for add_vectorexts&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/2471&quot;&gt;#2471&lt;/a&gt;: Add set_encodings to set source/target encodings&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4071&quot;&gt;#4071&lt;/a&gt;: Support the stm8 assembler on the sdcc toolchain.&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4101&quot;&gt;#4101&lt;/a&gt;: Add force includes for c/c++&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/2384&quot;&gt;#2384&lt;/a&gt;: Add extrafiles for vs/vsxmake generator&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;changes&quot;&gt;Changes&lt;/h3&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/3960&quot;&gt;#3960&lt;/a&gt;: Improve msys2/crt64 support&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4032&quot;&gt;#4032&lt;/a&gt;: Remove some old deprecated apis&lt;/li&gt;
-  &lt;li&gt;Improve to upgrade vcproj files in tools.msbuild&lt;/li&gt;
-  &lt;li&gt;Support add_requires(“xmake::xxx”) package&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4049&quot;&gt;#4049&lt;/a&gt;: Improve rust to support cross-compilation&lt;/li&gt;
-  &lt;li&gt;Improve clang modules support&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;bugs-fixed&quot;&gt;Bugs fixed&lt;/h3&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;Fix exit all child processes on macOS/Linux&lt;/li&gt;
-&lt;/ul&gt;
-
-</description>
-        <pubDate>Tue, 22 Aug 2023 00:00:00 +0800</pubDate>
-        <link>https://tboox.org/2023/08/22/xmake-update-v2.8.2/</link>
-        <guid isPermaLink="true">https://tboox.org/2023/08/22/xmake-update-v2.8.2/</guid>
-        
-        <category>xmake</category>
-        
-        <category>lua</category>
-        
-        <category>C/C++</category>
-        
-        <category>package</category>
-        
-        <category>performance</category>
-        
-        <category>API</category>
-        
-        <category>rust</category>
-        
-        
-        <category>xmake</category>
-        
-      </item>
-    
-      <item>
-        <title>Xmake v2.8.2 发布，官方包仓库数量突破 1k</title>
-        <description>&lt;p&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;Xmake&lt;/a&gt; 是一个基于 Lua 的轻量级跨平台构建工具。&lt;/p&gt;
-
-&lt;p&gt;它非常的轻量，没有任何依赖，因为它内置了 Lua 运行时。&lt;/p&gt;
-
-&lt;p&gt;它使用 xmake.lua 维护项目构建，相比 makefile/CMakeLists.txt，配置语法更加简洁直观，对新手非常友好，短时间内就能快速入门，能够让用户把更多的精力集中在实际的项目开发上。&lt;/p&gt;
-
-&lt;p&gt;我们能够使用它像 Make/Ninja 那样可以直接编译项目，也可以像 CMake/Meson 那样生成工程文件，另外它还有内置的包管理系统来帮助用户解决 C/C++ 依赖库的集成使用问题。&lt;/p&gt;
-
-&lt;p&gt;目前，Xmake 主要用于 C/C++ 项目的构建，但是同时也支持其他 native 语言的构建，可以实现跟 C/C++ 进行混合编译，同时编译速度也是非常的快，可以跟 Ninja 持平。&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake = Build backend + Project Generator + Package Manager + [Remote|Distributed] Build + Cache
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;尽管不是很准确，但我们还是可以把 Xmake 按下面的方式来理解：&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Xmake ≈ Make/Ninja + CMake/Meson + Vcpkg/Conan + distcc + ccache/sccache
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake&quot;&gt;项目源码&lt;/a&gt;&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://xmake.io/#/zh-cn/&quot;&gt;官方文档&lt;/a&gt;&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://xmake.io/#/zh-cn/about/course&quot;&gt;入门课程&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;&lt;img src=&quot;https://github.com/xmake-io/xmake-docs/raw/master/assets/img/index/package.gif&quot; width=&quot;650px&quot; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&quot;新特性介绍&quot;&gt;新特性介绍&lt;/h2&gt;
-
-&lt;p&gt;这个版本，我们新增了不少实用的 API，并且移除了一些几年前就被标记为废弃的接口，另外改进了动态库对 soname 的支持。&lt;/p&gt;
-
-&lt;p&gt;同时，在这期间，我们迎来了一些喜人的数据，我们的 &lt;a href=&quot;https://github.com/xmake-io/xmake-repo&quot;&gt;xmake-repo&lt;/a&gt; 官方仓库包的数量也突破了 1k，非常感谢 Xmake 的每位贡献者，我们的包仓库基本上都是社区贡献者贡献进来的。&lt;/p&gt;
-
-&lt;p&gt;尤其是 @xq114, @star-hengxing, @SirLynix 帮忙贡献了大量的包，非常感谢~&lt;/p&gt;
-
-&lt;p&gt;还有，Xmake 仓库 Commits 也突破到了 12k，一直在持续快速迭代中。下面我们简单介绍下，新版本中的一些主要更新内容。&lt;/p&gt;
-
-&lt;h3 id=&quot;增加-soname-支持&quot;&gt;增加 soname 支持&lt;/h3&gt;
-
-&lt;p&gt;新版本中，我们对 &lt;code class=&quot;highlighter-rouge&quot;&gt;set_version&lt;/code&gt; 接口新增了 soname 版本支持，用于控制 so/dylib 动态库的版本兼容性控制。&lt;/p&gt;
-
-&lt;p&gt;我们可以配置 soname 的版本后缀名称，xmake 会在编译、安装动态库的时候，自动生成符号链接，执行指定版本的动态库。&lt;/p&gt;
-
-&lt;p&gt;例如，如果我们配置：&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;xmake 会自动解析版本号的 major 版本作为 soname 版本，生成的结构如下：&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;└── lib
-    ├── libfoo.1.0.1.dylib
-    ├── libfoo.1.dylib -&amp;gt; libfoo.1.0.1.dylib
-    └── libfoo.dylib -&amp;gt; libfoo.1.dylib
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;当然，我们也可以指定 soname 到特定的版本命名：&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;1.0&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;A&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;soname&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;而如果没设置 soname，那么默认不开启 soname 版本兼容控制：&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_version&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;so&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;libfoo&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dylib&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;改进-add_vectorexts-接口&quot;&gt;改进 add_vectorexts 接口&lt;/h3&gt;
-
-&lt;p&gt;add_vectorexts 接口主要用于添加扩展指令优化选项，目前支持以下几种扩展指令集：&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mmx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;neon&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;avx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;avx2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;avx512&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;sse&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;sse2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;sse3&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;ssse3&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;sse4.2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;其中，&lt;code class=&quot;highlighter-rouge&quot;&gt;avx512&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;sse4.2&lt;/code&gt; 是我们新版本新增的指令配置，另外我们还新增了一个 &lt;code class=&quot;highlighter-rouge&quot;&gt;all&lt;/code&gt; 配置项，可以用于尽可能的开启所有扩展指令优化。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_vectorexts&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;all&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;新增-set_encodings-接口&quot;&gt;新增 set_encodings 接口&lt;/h3&gt;
-
-&lt;p&gt;这个新接口主要用于设置源文件、目标执行文件的编码。&lt;/p&gt;
-
-&lt;p&gt;默认情况下，我们仅仅指定编码，是会同时对源文件，目标文件生效。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;-- for all source/target encodings&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;-- msvc: /utf-8&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;它等价于：&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;source:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;target:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;并且，目前仅仅支持设置成 utf-8 编码，将来会不断扩展。&lt;/p&gt;
-
-&lt;p&gt;如果，我们仅仅想单独设置源文件编码，或者目标文件编码，也是可以的。&lt;/p&gt;
-
-&lt;h4 id=&quot;设置源文件编码&quot;&gt;设置源文件编码&lt;/h4&gt;
-
-&lt;p&gt;通常指的是编译的代码源文件的编码，我们可以这么设置。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;-- gcc/clang: -finput-charset=UTF-8, msvc: -source-charset=utf-8&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;source:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h4 id=&quot;设置目标文件编码&quot;&gt;设置目标文件编码&lt;/h4&gt;
-
-&lt;p&gt;它通常指的是目标可执行文件的运行输出编码。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;-- gcc/clang: -fexec-charset=UTF-8, msvc: -target-charset=utf-8&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;set_encodings&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;target:utf-8&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;新增-add_forceincludes-接口&quot;&gt;新增 add_forceincludes 接口&lt;/h3&gt;
-
-&lt;p&gt;我们还新增了 &lt;code class=&quot;highlighter-rouge&quot;&gt;add_forceincludes&lt;/code&gt; 接口，用于在配置文件中直接强制添加 &lt;code class=&quot;highlighter-rouge&quot;&gt;includes&lt;/code&gt; 头文件。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;它的效果类似于 &lt;code class=&quot;highlighter-rouge&quot;&gt;#include &amp;lt;config.h&amp;gt;&lt;/code&gt;，但是不需要在源码中显式添加它了。&lt;/p&gt;
-
-&lt;p&gt;另外，它的搜索路径也是需要通过 &lt;code class=&quot;highlighter-rouge&quot;&gt;add_includedirs&lt;/code&gt; 来控制，而不是直接配置文件路径。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_includedirs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;默认 &lt;code class=&quot;highlighter-rouge&quot;&gt;add_forceincludes&lt;/code&gt; 匹配 c/c++/objc。如果仅仅只想匹配 c++ 可以这么配置：&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcekinds&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;cxx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;如果想同时匹配多个源文件类型，也是可以的：&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_forceincludes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config.h&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcekinds&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cxx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mxx&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}})&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;对于 gcc，它会设置 &lt;code class=&quot;highlighter-rouge&quot;&gt;-include config.h&lt;/code&gt; 标志，对于 msvc，它会设置 &lt;code class=&quot;highlighter-rouge&quot;&gt;-FI config.h&lt;/code&gt; 标志。&lt;/p&gt;
-
-&lt;h3 id=&quot;新增-add_extrafiles-接口&quot;&gt;新增 add_extrafiles 接口&lt;/h3&gt;
-
-&lt;p&gt;在之前的版本中，如果我们要在 vs/vsxmake 工程生成器中添加一些额外的文件到工程列表中去，只能通过 &lt;code class=&quot;highlighter-rouge&quot;&gt;add_headerfiles&lt;/code&gt; 来添加，但是这有一点 Hack。&lt;/p&gt;
-
-&lt;p&gt;因此，我们新增了 &lt;code class=&quot;highlighter-rouge&quot;&gt;add_extrafiles&lt;/code&gt; 接口，专门用于配置一些额外的文件到工程中，这样，用户也可以快速点击编辑它们。&lt;/p&gt;
-
-&lt;p&gt;这些被添加文件不是代码文件，不会参与编译，也不会被安装，仅仅只是能够让用户方便的在生成的工程 IDE 中，快速编辑访问它们。&lt;/p&gt;
-
-&lt;p&gt;将来，我们也可能用此接口做更多其他的事情。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;add_extrafiles&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;assets/other.txt&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;h3 id=&quot;sdasstm8-汇编器支持&quot;&gt;sdasstm8 汇编器支持&lt;/h3&gt;
-
-&lt;p&gt;@lanjackg2003 帮忙贡献了 sdcc/sdasstm8 汇编器的支持，非常感谢。&lt;/p&gt;
-
-&lt;p&gt;相关 patch, &lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4071&quot;&gt;#4071&lt;/a&gt;&lt;/p&gt;
-
-&lt;h3 id=&quot;改进-rust-交叉编译支持&quot;&gt;改进 Rust 交叉编译支持&lt;/h3&gt;
-
-&lt;p&gt;新版本中，我们还对 Rust 项目构建做了改进，新增了交叉编译支持，包括对依赖包的交叉编译。&lt;/p&gt;
-
-&lt;div class=&quot;language-lua highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;set_arch&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;aarch64-unknown-none&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_rules&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;mode.release&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;mode.debug&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;span class=&quot;n&quot;&gt;add_requires&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cargo::test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;configs&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;main&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;cargo_toml&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;join&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;projectdir&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(),&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Cargo.toml&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)}})&lt;/span&gt;
-
-&lt;span class=&quot;n&quot;&gt;target&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;set_kind&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;binary&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;add_files&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;src/main.rs&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-    &lt;span class=&quot;n&quot;&gt;add_packages&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cargo::test&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-
-&lt;p&gt;例如上面的项目配置，我们通过 &lt;code class=&quot;highlighter-rouge&quot;&gt;set_arch(&quot;aarch64-unknown-none&quot;)&lt;/code&gt; 全局修改编译架构，就能对依赖包，以及自身项目进行交叉编译。&lt;/p&gt;
-
-&lt;p&gt;如果没有配置 &lt;code class=&quot;highlighter-rouge&quot;&gt;set_arch&lt;/code&gt;，我们也可以通过命令 &lt;code class=&quot;highlighter-rouge&quot;&gt;xmake f -a aarch64-unknown-none; xmake&lt;/code&gt; 来动态切换编译架构。&lt;/p&gt;
-
-&lt;p&gt;当然，别忘了先得执行 &lt;code class=&quot;highlighter-rouge&quot;&gt;rustup target add aarch64-unknown-none &lt;/code&gt; 安装对应的 target 才行。&lt;/p&gt;
-
-&lt;p&gt;更多上下文，见：&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4049&quot;&gt;#4049&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&quot;更新日志&quot;&gt;更新日志&lt;/h2&gt;
-
-&lt;h3 id=&quot;新特性&quot;&gt;新特性&lt;/h3&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4002&quot;&gt;#4002&lt;/a&gt;: 增加 soname 支持&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/1613&quot;&gt;#1613&lt;/a&gt;: 为 add_vectorexts 增加 avx512 和 sse4.2 支持&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/2471&quot;&gt;#2471&lt;/a&gt;: 添加 set_encodings API 去设置源文件和目标文件的编码&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4071&quot;&gt;#4071&lt;/a&gt;: 支持 sdcc 的 stm8 汇编器&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4101&quot;&gt;#4101&lt;/a&gt;: 为 c/c++ 添加 force includes&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/2384&quot;&gt;#2384&lt;/a&gt;: 为 vs/vsxmake 生成器添加 add_extrafiles 接口&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;改进&quot;&gt;改进&lt;/h3&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/3960&quot;&gt;#3960&lt;/a&gt;: 改进 msys2/crt64 支持&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/pull/4032&quot;&gt;#4032&lt;/a&gt;: 移除一些非常老的废弃接口&lt;/li&gt;
-  &lt;li&gt;改进 tools.msbuild 升级 vcproj 文件&lt;/li&gt;
-  &lt;li&gt;支持 add_requires(“xmake::xxx”) 包&lt;/li&gt;
-  &lt;li&gt;&lt;a href=&quot;https://github.com/xmake-io/xmake/issues/4049&quot;&gt;#4049&lt;/a&gt;: 改进 Rust 支持交叉编译&lt;/li&gt;
-  &lt;li&gt;改进 clang 下 c++ modules 支持&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;bugs-修复&quot;&gt;Bugs 修复&lt;/h3&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;修复 macOS/Linux 上子子进程无法快速退出问题&lt;/li&gt;
-&lt;/ul&gt;
-
-</description>
-        <pubDate>Tue, 22 Aug 2023 00:00:00 +0800</pubDate>
-        <link>https://tboox.org/cn/2023/08/22/xmake-update-v2.8.2/</link>
-        <guid isPermaLink="true">https://tboox.org/cn/2023/08/22/xmake-update-v2.8.2/</guid>
         
         <category>xmake</category>
         
